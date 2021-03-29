@@ -74,11 +74,12 @@ public class RepositoryClass {
 	   	            }
 	   	            }
 	   	        String logMessage = commit.getShortMessage();
-	   	        Date time = new Date(commit.getCommitTime());
+ 	   		    Long temp = Long.parseLong(commit.getCommitTime()+"") * 1000; 
+ 	            Date date = new Date(temp);
 	   	        if (logMessage.startsWith(s))  {
 	   		    JSONArray array = new JSONArray();
 	   		    array.put("CommitShortMEssage:"+ logMessage);
-	   		    array.put("CommitTime:"+ time);
+	   		    array.put("CommitTime:"+ date);
                 jsonObject.put(commit.getId().toString(), array);
 	   	         }
 	   	        previousCommit = commit;
