@@ -1,6 +1,7 @@
 package main;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,10 +13,21 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import org.apache.commons.io.FileUtils;
+import org.json.CDL;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import com.jayway.jsonpath.Configuration;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.ReadContext;
+import com.jayway.jsonpath.spi.json.JsonOrgJsonProvider;
+
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -23,6 +35,8 @@ import java.util.Map;
 
 
 public class GetBugFixed  {
+	public static String projName_1="S2GRAPH";
+
 	private static final Logger LOGGER = Logger.getLogger( GetBugFixed.class.getName() );
 	
 	public static JSONArray readJsonArrayFromUrl(String url) throws IOException, JSONException {
@@ -54,52 +68,54 @@ public class GetBugFixed  {
 	    }
 	
 	   
-    public static List<Object> checkLinkage() throws JSONException, IOException {
-	  String filename = "CommitLog.json";
-	  float nolinked=0;
-	  float linked=0;
-	  ArrayList <String> tickets = new ArrayList<>();
-      JSONObject jsonObject = parseJSONFile(filename);
-      for (Iterator<?> key=jsonObject.keys();key.hasNext();) {
-    	    JSONArray commit = (JSONArray) jsonObject.get((String) key.next());
-    	  
-    	    if (commit.get(4).toString().endsWith("No")) {
-    	    	nolinked=nolinked+1;
-    	    }
-    	    if (commit.get(4).toString().endsWith("Yes")) {
-    	    	linked=linked+1;
-    	    	tickets.add(commit.get(5).toString().split(":")[1]);
-    	    }
-    	}
-     int tot= (int) (nolinked+linked);
-     float link;
-     float linkage;
-     if (tot!=0) {
-       linkage = (linked / (tot))*100;
-       link= Math.round(linkage); // per eccesso
-     } 
-     else {
-          link= 0; 
-        } 
-     
-     ArrayList<Object> result = new ArrayList<>();
-     result.add(link);
-     result.add(tickets);
-     result.add(nolinked);
-     result.add(linked);
-     result.add(tot);
-
-     return result;
-
-  }
+	  public static List<Object> checkLinkage(String ProjName) throws JSONException, IOException {
+		  String filename = "CommitLog"+ProjName+".json";
+		  float nolinked=0;
+		  float linked=0;
+		  ArrayList <String> tickets = new ArrayList<>();
+	      JSONObject jsonObject = parseJSONFile(filename);
+	      JSONArray  arr = jsonObject.getJSONArray("CommitsLog");
+	      for (int i=0;i<arr.length();i++) {
+	    	    JSONObject commit = arr.getJSONObject(i);
+	    	    if (commit.get("Linked").toString().equals("No")) {
+	    	    	nolinked=nolinked+1;
+	    	    }
+	    	    if (commit.get("Linked").toString().equals("Yes")) {
+	    	    	linked=linked+1;
+	    	    	tickets.add(commit.get("Ticket").toString());
+	    	    }
+	    	}
+	     int tot= (int) (nolinked+linked);
+	     float link;
+	     float linkage;
+	     if (tot!=0) {
+	       linkage = (linked / (tot))*100;
+	       link= Math.round(linkage); // per eccesso
+	     } 
+	     else {
+	          link= 0; 
+	        } 
+	    
+	     ArrayList<Object> result = new ArrayList<>();
+	     result.add(link);
+	     result.add(tickets);
+	     result.add(nolinked);
+	     result.add(linked);
+	     result.add(tot);
+	     return result;
+	  }
+	    
   public static List<String> validDate() throws JSONException, IOException {
-	  String filename = "CommitLog.json";
+	  String filename = "CommitLogS2GRAPH.json";
       JSONObject jsonObject = parseJSONFile(filename);
       ArrayList<String> dateslist = new ArrayList<>();
-	  for (Iterator<?> key=jsonObject.keys();key.hasNext();) {
-  	    JSONArray commit = (JSONArray) jsonObject.get((String) key.next());
-  	    String dates = commit.get(1).toString().split(":")[1];
-  	    dateslist.add(dates);
+      JSONArray ja = jsonObject.getJSONArray("CommitsLog");
+	  for (int i=0;i<ja.length();i++) {
+  	    JSONObject commit = ja.getJSONObject(i);
+  	    String dates =  commit.getString("CommitTime");
+  	    String years_month = dates.substring(0,7);
+  	    System.out.println(years_month);
+  	    dateslist.add(years_month);
 	  }
 	  return dateslist;
   }
@@ -107,13 +123,10 @@ public class GetBugFixed  {
   {
       // hashmap to store the frequency of element
       Map<String, Integer> hm = new HashMap<>();
-
       for (String i : list) {
           Integer j = hm.get(i);
           hm.put(i, (j == null) ? 1 : j + 1);
       }
-
-  
       return  hm;
   }
   public static List<String> getJiraBugFixed() throws IOException, JSONException {
@@ -133,24 +146,31 @@ public class GetBugFixed  {
       JSONObject json = readJsonFromUrl(url);
       JSONArray issues = json.getJSONArray("issues");
       total = json.getInt("total");
+      JSONArray nwa = new JSONArray();
 	try (FileWriter fileWriter = new FileWriter(projName + "Bug_Fixed.csv")) {
-          fileWriter.append("Key,id,Created_date,Resolution_date,CommitMessage");
+          fileWriter.append("Key,id,Created_date,Resolution_date");
           fileWriter.append("\n");
           for (; i < total && i < j; i++) {
-             fileWriter.append(issues.getJSONObject(i%1000).get("key").toString());
-             fileWriter.append(",");
-             fileWriter.append(issues.getJSONObject(i%1000).get("id").toString());
+             JSONObject jo = new JSONObject();
+             String key = issues.getJSONObject(i%1000).get("key").toString();
+             fileWriter.append(key);
              fileWriter.append(",");
              JSONObject fields= (JSONObject) issues.getJSONObject(i%1000).get("fields");
-             fileWriter.append((String) fields.get("created"));
-             fileWriter.append(",");
-             fileWriter.append((String) fields.get("resolutiondate"));
+             String created_date = (String) fields.get("created");
+             fileWriter.append(created_date);
              String msg="["+issues.getJSONObject(i%1000).get("key").toString()+"]";
              msg= msg.split("\\[")[1];
              msg= msg.split("\\]")[0];
              tickets.add(msg);
              fileWriter.append("\n");
+             jo.put("Key", key);
+             jo.put("Created_date", created_date);
+             nwa.put(jo);
           }
+        JSONObject info = new JSONObject();
+        info.put("INFO", nwa);
+        try (FileWriter file = new
+				  FileWriter("Info.json")) { file.write(info.toString(1)); }
        } catch (Exception e) {
           LOGGER.log(Level.SEVERE, "Error in csv writer");
        }
@@ -174,29 +194,62 @@ public class GetBugFixed  {
 	    result.add(missingtickets);
 		return result;
 	  }
+  public static void getFixedDate() throws JSONException, IOException {
+	  JSONObject BugsFixed = parseJSONFile("Info.json");
+	  JSONArray ja = BugsFixed.getJSONArray("INFO");
+	  String filename = "CommitLogS2GRAPH.json";
+      JSONObject CommitLog = parseJSONFile(filename);
+      JSONArray try_ = CommitLog.getJSONArray("CommitsLog");
+      JSONObject read = new JSONObject();
+      read.put("CommitsLog", try_);
+	  for(int p=0;p<ja.length();p++) {
+		  JSONObject bug = ja.getJSONObject(p);
+		  String created_date = bug.getString("Created_date");
+		  String ticket_name = bug.getString("Key");
+  	      String query = ("$.CommitsLog[?(@.Ticket=='"+ticket_name+"')].['CommitTime']");
+  		  ReadContext ctx = JsonPath.parse(read.toString());
+	      List <String> CommitDates = ctx.read(query);
+	      if (CommitDates.size()>0) {
+	      String CommitDate = CommitDates.get(0); //è la più vecchia
+	      bug.put("CommitDate", CommitDate.substring(0,7));
+	      }
+	  }
+	  try (FileWriter file = new FileWriter("S2GRAPH_BUGS.json")) { 
+		  file.write(BugsFixed.toString(1)); 
+		  }
+  }
+  public static void getMeasures(String ProjName,ArrayList<String> ticketsjira) throws JSONException, IOException {
+	  ArrayList<Object> result = (ArrayList<Object>) checkLinkage(ProjName); 
+	  ArrayList <String> ticketsgit = (ArrayList<String>) result.get(1);
+	  ArrayList<Object> result2 = (ArrayList<Object>) compareArrayList(ticketsgit,ticketsjira);
+	  JSONObject jsonObject = new JSONObject(); 
+	  jsonObject.put("TicketsGit", ticketsgit); 
+	  jsonObject.put("TicketsJira", ticketsjira);
+	  jsonObject.put("MissingTicket",result2.get(1));
+	  jsonObject.put("#CommitNotLinked", result.get(2));
+	  jsonObject.put("#CommitLinked", result.get(3)); 
+	  jsonObject.put("#Commit",  result.get(4));
+	  jsonObject.put("Linkage #CommitLinked/#Commit", result.get(0).toString()+" %");
+	  jsonObject.put("Linkage (Bug Fixed Ticket Jira/Total Ticket Git)",  result2.get(0).toString()+" %"); 	
+	  jsonObject.put("MW_SIZE", ticketsjira.size()*0.1);
+	  try (FileWriter file = new FileWriter("LinkageResult"+ProjName+".json")) { 
+		  file.write(jsonObject.toString(1)); 
+		  }
+  }
+  @SuppressWarnings("deprecation")
+public static  void JSON2CSV(JSONArray array) throws IOException {         
+  	File file=new File("Asse_X"+".csv");
+      String csv = CDL.toString(array);
+      FileUtils.writeStringToFile(file, csv);
+  }
   
   public static void main(String[] args) throws IOException, JSONException { 
-	  ArrayList<Object> result = (ArrayList<Object>) checkLinkage();
-	  ArrayList <String> ticketsgit = (ArrayList<String>) result.get(1);
-	  ArrayList<String> ticketsjira= (ArrayList<String>) getJiraBugFixed();
-	  ArrayList<Object> result2 = (ArrayList<Object>) compareArrayList(ticketsgit,ticketsjira);
-	  JSONObject jsonObject = new JSONObject();
-	  jsonObject.put("TicketsGit", ticketsgit);
-	  jsonObject.put("TicketsJira", ticketsjira);
-	  jsonObject.put("MissingTicket", result2.get(1));
-	  jsonObject.put("#CommitNotLinked", result.get(2));
-	  jsonObject.put("#CommitLinked", result.get(3));
-	  jsonObject.put("#Commit", result.get(4));
-
-	  jsonObject.put("Linkage #CommitLinked/#Commit", result.get(0).toString()+" %");
-	  jsonObject.put("Linkage (Bug Fixed Ticket Jira/ Ticket Git)", result2.get(0).toString()+" %");
-	  try (FileWriter file = new FileWriter("LinkageResult.json")) {
-		file.write(jsonObject.toString(1));
-	}
-	  
+      ArrayList<String> ticketsjira1= (ArrayList<String>) getJiraBugFixed();
+      getMeasures(projName_1,ticketsjira1);
+	  getFixedDate();
 	  Map<String, Integer> hm = countFrequencies(validDate());
-	  try (FileWriter writer = new FileWriter("Dates.csv")) {
-		  writer.write("Mese");
+	  try (FileWriter writer = new FileWriter("Asse_y.csv")) {  // i mesi in cui sono presenti commit
+		  writer.write("Anno-mese");
 		  writer.write(",");
 		  writer.write("Ticket");
 		  writer.write("\n");
@@ -206,5 +259,7 @@ public class GetBugFixed  {
 			  writer.write(val.getValue().toString());
 			  writer.write("\n");
 		  }
-	}
-} }
+	  }
+	  JSONObject BugsFixed = parseJSONFile("S2GRAPH_BUGS.json");
+	  JSON2CSV(BugsFixed.getJSONArray("INFO"));
+}  }
