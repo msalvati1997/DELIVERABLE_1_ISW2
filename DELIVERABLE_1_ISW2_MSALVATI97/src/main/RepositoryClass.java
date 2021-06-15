@@ -6,13 +6,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.eclipse.jgit.api.Git;
@@ -36,7 +33,7 @@ import org.json.JSONObject;
 
 @SuppressWarnings("unused")
 public class RepositoryClass {
-	public static String projName_1="S2GRAPH";
+	private static final String PROJNAME="S2GRAPH";
 	private Repository repo;
 	private Git git;
 	private String path;
@@ -106,7 +103,7 @@ public class RepositoryClass {
 	public static Date dateToUTC(Date date){
 	    return new Date(date.getTime() - Calendar.getInstance().getTimeZone().getOffset(date.getTime()));
 	}
-	public static  JSONObject getcommitlogs(Git git,String ProjName, String pattern) throws IOException, GitAPIException, JSONException {
+	public static  JSONObject getcommitlogs(Git git,String pattern) throws IOException, GitAPIException, JSONException {
 	    	    JSONObject jsonObject = new JSONObject();
     	        JSONArray arr = new JSONArray();
 	    	    Iterable<RevCommit> log = git.log().call();
@@ -147,12 +144,7 @@ public class RepositoryClass {
 		   	        }
 					if (listDiffs!=null) {
 						json.put("NumberOfFilesTouched",listDiffs.size());
-				 	    ArrayList <String> diffinfo= new ArrayList<>();
-				 	    for (DiffEntry diff : listDiffs) {
-				 	           diffinfo.add("Diff: " + diff.getChangeType() + ": " +
-				                       (diff.getOldPath().equals(diff.getNewPath()) ? diff.getNewPath() : diff.getOldPath() + " -> " + diff.getNewPath()));
-				            }
-				 	    json.put("DiffFiles", diffinfo);
+				 	    json.put("DiffFiles", getdiffinfo(listDiffs));
 					}
 					else {
 						json.put("NumberOfFilesTouched",0);
@@ -165,6 +157,14 @@ public class RepositoryClass {
 	    	    git.close();
 				return jsonObject;
 	    	}
+	private static ArrayList<String> getdiffinfo(List<DiffEntry> listDiffs) {
+		ArrayList <String> diffinfo= new ArrayList<>();
+		for (DiffEntry diff : listDiffs) {
+		       diffinfo.add("Diff: " + diff.getChangeType() + ": " +
+		               (diff.getOldPath().equals(diff.getNewPath()) ? diff.getNewPath() : diff.getOldPath() + " -> " + diff.getNewPath()));
+		    }
+		return diffinfo;
+	}
     @SuppressWarnings("finally")
 	private static List<DiffEntry> listDiff(Repository repository, Git git, String oldCommit, String newCommit) throws GitAPIException, IOException {
     		List<DiffEntry> listDiff=null;
@@ -211,8 +211,8 @@ public class RepositoryClass {
 	public static void main(String[] args) throws IOException, GitAPIException, JSONException {
 
 	 	        RepositoryClass r2 = new RepositoryClass("C:\\Users\\salva\\git\\incubator-s2graph\\.git");
-				JSONObject json2 = getcommitlogs(r2.getGit(), projName_1, ptrn1);
-				try (FileWriter file = new FileWriter("CommitLog"+ projName_1+ ".json")) {
+				JSONObject json2 = getcommitlogs(r2.getGit(),ptrn1);
+				try (FileWriter file = new FileWriter("CommitLog"+ PROJNAME+ ".json")) {
 					file.write(json2.toString(1));
 				}
 			}
